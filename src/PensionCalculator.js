@@ -1,352 +1,293 @@
-import React, { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "./components/ui/card";
-import { Upload } from "lucide-react";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import React, { useState } from 'react';
+import Papa from 'papaparse';
+import _ from 'lodash';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { UploadCloud } from 'lucide-react';
 
 const PensionCalculator = () => {
-  const [csvData, setCsvData] = useState(null);
-  const [calculatorSheet, setCalculatorSheet] = useState(null);
-  const [summaryTables, setSummaryTables] = useState({
-    table833: null,
-    table116: null,
-  });
+  const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
-  const handleCSVUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const text = e.target.result;
-          Papa.parse(text, {
-            header: true,
-            dynamicTyping: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-              setCsvData(results.data);
-              setError(null);
-            },
-            error: (error) => {
-              setError("Error parsing CSV: " + error.message);
-            },
-          });
-        } catch (error) {
-          setError("Error reading CSV file: " + error.message);
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const handleExcelUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      try {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {
-              cellStyles: true,
-              cellFormulas: true,
-              cellDates: true,
-              cellNF: true,
-              sheetStubs: true,
-            });
-            setCalculatorSheet(workbook);
-            setError(null);
-          } catch (error) {
-            setError("Error parsing Excel file: " + error.message);
-          }
-        };
-        reader.readAsArrayBuffer(file);
-      } catch (error) {
-        setError("Error reading Excel file: " + error.message);
-      }
-    }
-  };
-
-  const calculateMonthlyInterest = (
-    openingBalance,
-    monthNumber,
-    annualRate
-  ) => {
-    // Formula: ROUND(opening_balance * annual_rate * month_number / 1200, 0)
-    return Math.round((openingBalance * annualRate * monthNumber) / 1200);
-  };
-
-  const calculatePensionTables = (config) => {
-    const { openingBalance833, openingBalance116, annualRate } = config;
-
-    // Define payment dates and calculate interest
-    const paymentDates = [
-      "31-03-2024",
-      "30-04-2024",
-      "31-05-2024",
-      "30-06-2024",
-      "31-07-2024",
-      "31-08-2024",
-      "30-09-2024",
-      "31-10-2024",
-      "30-11-2024",
-      "31-12-2024",
-      "31-01-2025",
-      "28-02-2025",
-      "31-03-2025",
-      "30-04-2025",
-      "31-05-2025",
-      "30-06-2025",
-      "31-07-2025",
-    ];
-
-    // Calculate tables for both years
-    const calculateYearTable = (openingBalance, monthsInYear) => {
-      return monthsInYear.map((month) => {
-        const monthNumber = month.monthNumber;
-        const interest = calculateMonthlyInterest(
-          openingBalance,
-          monthNumber,
-          annualRate
-        );
-        const total = openingBalance + interest;
-        return {
-          paymentDate: month.date,
-          openingBalance: openingBalance,
-          interest: interest,
-          totalPayable: total,
-        };
-      });
+  // Get financial year interest rates
+  const getInterestRate = (fy) => {
+    const interestRates = {
+      '1995-96': 12, '1996-97': 12, '1997-98': 12, '1998-99': 12,
+      '1999-00': 12, '2000-01': 11, '2001-02': 9.5, '2002-03': 9.5,
+      '2003-04': 9.5, '2004-05': 9.5, '2005-06': 8.5, '2006-07': 8.5,
+      '2007-08': 8.5, '2008-09': 8.5, '2009-10': 8.5, '2010-11': 9.5,
+      '2011-12': 8.25, '2012-13': 8.5, '2013-14': 8.75, '2014-15': 8.75,
+      '2015-16': 8.8, '2016-17': 8.65, '2017-18': 8.55, '2018-19': 8.65,
+      '2019-20': 8.5, '2020-21': 8.5, '2021-22': 8.1, '2022-23': 8.15,
+      '2023-24': 8.25
     };
-
-    // Define months with their sequence numbers
-    const year2024Months = [
-      { date: "31-03-2024", monthNumber: 0 },
-      { date: "30-04-2024", monthNumber: 1 },
-      { date: "31-05-2024", monthNumber: 2 },
-      { date: "30-06-2024", monthNumber: 3 },
-      { date: "31-07-2024", monthNumber: 4 },
-      { date: "31-08-2024", monthNumber: 5 },
-      { date: "30-09-2024", monthNumber: 6 },
-      { date: "31-10-2024", monthNumber: 7 },
-      { date: "30-11-2024", monthNumber: 8 },
-      { date: "31-12-2024", monthNumber: 9 },
-      { date: "31-01-2025", monthNumber: 10 },
-      { date: "28-02-2025", monthNumber: 11 },
-      { date: "31-03-2025", monthNumber: 12 },
-    ];
-
-    const year2025Months = [
-      { date: "30-04-2025", monthNumber: 1 },
-      { date: "31-05-2025", monthNumber: 2 },
-      { date: "30-06-2025", monthNumber: 3 },
-      { date: "31-07-2025", monthNumber: 4 },
-    ];
-
-    // Calculate 8.33% table for 2024
-    const table833_2024 = calculateYearTable(openingBalance833, year2024Months);
-    // Use the closing balance of March 2025 as opening balance for 2025
-    const closingBalance833 =
-      table833_2024[table833_2024.length - 1].totalPayable;
-    const table833_2025 = calculateYearTable(closingBalance833, year2025Months);
-
-    // Calculate 1.16% table for 2024
-    const table116_2024 = calculateYearTable(openingBalance116, year2024Months);
-    // Use the closing balance of March 2025 as opening balance for 2025
-    const closingBalance116 =
-      table116_2024[table116_2024.length - 1].totalPayable;
-    const table116_2025 = calculateYearTable(closingBalance116, year2025Months);
-
-    // Combine tables for both years
-    const table833 = [...table833_2024, ...table833_2025];
-    const table116 = [...table116_2024, ...table116_2025];
-
-    return { table833, table116 };
+    return interestRates[fy] || 8.25;
   };
 
-  const calculatePension = async () => {
-    if (!csvData || !calculatorSheet) {
-      setError("Please upload both CSV and Excel files first");
-      return;
+  // Get fixed paid amount based on date
+  const getFixedAmount = (date) => {
+    const [month, year] = date.split('/').map(num => parseInt(num));
+    const compareDate = new Date(year, month - 1);
+    
+    if (compareDate.getFullYear() === 1995 && month === 11) return 209;
+    if (compareDate < new Date(2001, 5)) return 417;
+    if (compareDate < new Date(2014, 8)) return 541;
+    return 1250;
+  };
+
+  // Calculate contribution and interest for each financial year
+  const calculateYearlyData = (data) => {
+    const fyData = {};
+    let currentYear = 1995;
+    const endYear = 2024;
+    
+    // Initialize all financial years
+    for (let year = currentYear; year <= endYear; year++) {
+      const fy = `${year}-${(year + 1).toString().substring(2)}`;
+      fyData[fy] = {
+        wages: 0,
+        contribution: 0,
+        paid: 0,
+        difference: 0,
+        interest: 0,
+        total: 0
+      };
     }
+
+    // Process actual data
+    data.forEach(row => {
+      const wageMonth = row['Wage Month (all the months from date of joining to date of leaving)'];
+      if (!wageMonth) return;
+
+      const [month, yearStr] = wageMonth.split('/');
+      const year = parseInt(yearStr);
+      const month_num = parseInt(month);
+      const fy = month_num <= 3 ? `${year-1}-${year.toString().substring(2)}` : `${year}-${(year+1).toString().substring(2)}`;
+
+      if (fyData[fy]) {
+        const wages = parseInt(row['Wages on which PF contribution was paid']) || 0;
+        const contribution = Math.round(wages * 0.0833);
+        const paid = getFixedAmount(wageMonth);
+
+        fyData[fy].wages += wages;
+        fyData[fy].contribution += contribution;
+        fyData[fy].paid += paid;
+      }
+    });
+
+    // Calculate differences and interest
+    let cumulativeBalance = 0;
+    Object.keys(fyData).forEach((fy, index) => {
+      const yearData = fyData[fy];
+      yearData.difference = Math.max(yearData.contribution - yearData.paid, 0);
+      
+      // Calculate interest
+      const interestRate = getInterestRate(fy);
+      if (index === 0) {
+        yearData.interest = Math.round((yearData.difference * interestRate) / 100);
+      } else {
+        yearData.interest = Math.round((cumulativeBalance * interestRate) / 100);
+      }
+      
+      yearData.total = yearData.difference + yearData.interest;
+      cumulativeBalance += yearData.total;
+    });
+
+    return fyData;
+  };
+
+  // Calculate payment schedule
+  const calculatePaymentSchedule = (totalAmount) => {
+    const schedule = [];
+    const currentDate = new Date();
+    let baseAmount = totalAmount;
+    
+    // Calculate for current FY (2023-24)
+    const months2024 = [
+      '31-03-2024', '30-04-2024', '31-05-2024', '30-06-2024', 
+      '31-07-2024', '31-08-2024', '30-09-2024', '31-10-2024',
+      '30-11-2024', '31-12-2024', '31-01-2025', '28-02-2025',
+      '31-03-2025'
+    ];
+
+    months2024.forEach((date, index) => {
+      const interest = Math.round((baseAmount * 8.25 * index) / 1200);
+      schedule.push({
+        date,
+        openingBalance: baseAmount,
+        interest,
+        totalPayable: baseAmount + interest
+      });
+    });
+
+    // Set new base amount for 2024-25
+    baseAmount = schedule[schedule.length - 1].totalPayable;
+
+    // Calculate for next FY (2024-25)
+    const months2025 = [
+      '30-04-2025', '31-05-2025', '30-06-2025', '31-07-2025',
+      '31-08-2025', '30-09-2025', '31-10-2025', '30-11-2025',
+      '31-12-2025'
+    ];
+
+    months2025.forEach((date, index) => {
+      const interest = Math.round((baseAmount * 8.25 * (index + 1)) / 1200);
+      schedule.push({
+        date,
+        openingBalance: baseAmount,
+        interest,
+        totalPayable: baseAmount + interest
+      });
+    });
+
+    return schedule;
+  };
+
+  // Process the CSV data
+  const processData = (data) => {
+    try {
+      const yearlyData = calculateYearlyData(data);
+      
+      // Calculate total amount
+      const totalAmount = Object.values(yearlyData).reduce((sum, year) => 
+        sum + year.total, 0);
+
+      const paymentSchedule = calculatePaymentSchedule(totalAmount);
+
+      setResults({
+        yearlyData,
+        paymentSchedule,
+        totalAmount
+      });
+    } catch (err) {
+      setError('Error processing data: ' + err.message);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
     setLoading(true);
+    setError('');
+
     try {
-      // Extract wage data from CSV
-      const wageData = csvData.map((row) => ({
-        month: row["Wage Month"],
-        wages: row["Wages on which PF contribution was paid"],
-      }));
-
-      // Configuration based on the sample data
-      const config = {
-        openingBalance833: 346110, // From image 1
-        openingBalance116: 12527, // From image 2
-        annualRate: 8.25, // 8.25% annual interest rate
-      };
-
-      // Calculate tables
-      const { table833, table116 } = calculatePensionTables(config);
-
-      // Update summary tables
-      setSummaryTables({
-        table833,
-        table116,
+      const text = await file.text();
+      Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          processData(results.data);
+          setLoading(false);
+        },
+        error: (error) => {
+          setError('Error parsing CSV: ' + error.message);
+          setLoading(false);
+        }
       });
-    } catch (error) {
-      setError("Error in calculation: " + error.message);
-    } finally {
+    } catch (err) {
+      setError('Error reading file: ' + err.message);
       setLoading(false);
     }
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <Card className="mb-4">
+    <div className="p-4 max-w-6xl mx-auto">
+      <Card>
         <CardHeader>
-          <CardTitle>Pension Calculator</CardTitle>
+          <CardTitle>Pension Contribution Calculator</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border-2 border-dashed rounded-lg p-4 text-center">
-              <label className="block mb-2">Upload Wage CSV File</label>
-              <div className="flex items-center justify-center">
-                <input
-                  type="file"
+          <div className="mb-6">
+            <div className="flex items-center justify-center w-full">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <UploadCloud className="w-8 h-8 mb-2 text-gray-400" />
+                  <p className="text-sm text-gray-500">Upload CSV file</p>
+                </div>
+                <input 
+                  type="file" 
+                  className="hidden" 
                   accept=".csv"
-                  onChange={handleCSVUpload}
-                  className="hidden"
-                  id="csvInput"
+                  onChange={handleFileUpload}
                 />
-                <label
-                  htmlFor="csvInput"
-                  className="flex items-center justify-center p-2 border rounded cursor-pointer hover:bg-gray-50"
-                >
-                  <Upload className="w-6 h-6 mr-2" />
-                  Choose CSV
-                </label>
-              </div>
-              {csvData && (
-                <p className="mt-2 text-green-600">✓ CSV File Uploaded</p>
-              )}
-            </div>
-
-            <div className="border-2 border-dashed rounded-lg p-4 text-center">
-              <label className="block mb-2">Upload Calculator Excel File</label>
-              <div className="flex items-center justify-center">
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  onChange={handleExcelUpload}
-                  className="hidden"
-                  id="excelInput"
-                />
-                <label
-                  htmlFor="excelInput"
-                  className="flex items-center justify-center p-2 border rounded cursor-pointer hover:bg-gray-50"
-                >
-                  <Upload className="w-6 h-6 mr-2" />
-                  Choose Excel
-                </label>
-              </div>
-              {calculatorSheet && (
-                <p className="mt-2 text-green-600">✓ Excel File Uploaded</p>
-              )}
+              </label>
             </div>
           </div>
 
-          <button
-            onClick={calculatePension}
-            disabled={!csvData || !calculatorSheet || loading}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            {loading ? "Calculating..." : "Calculate Pension"}
-          </button>
-
           {error && (
-            <div className="mt-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+            <div className="text-red-500 mb-4">
               {error}
             </div>
           )}
 
-          {summaryTables.table833 && (
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold mb-2">
-                AMOUNT PAYABLE TILL DATE OF PAYMENT IN 2023-24 (8.33%)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="border p-2">If paid by</th>
-                      <th className="border p-2">
-                        Opening Balance FOR 2023-24
-                      </th>
-                      <th className="border p-2">
-                        Current year Interest up to the month
-                      </th>
-                      <th className="border p-2">Total payable</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summaryTables.table833.map((row, index) => (
-                      <tr key={index}>
-                        <td className="border p-2">{row.paymentDate}</td>
-                        <td className="border p-2 text-right">
-                          {row.openingBalance.toLocaleString()}
-                        </td>
-                        <td className="border p-2 text-right">
-                          {row.interest.toLocaleString()}
-                        </td>
-                        <td className="border p-2 text-right">
-                          {row.totalPayable.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {loading && (
+            <div className="text-center">
+              Processing...
             </div>
           )}
 
-          {summaryTables.table116 && (
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold mb-2">
-                AMOUNT PAYABLE TILL DATE OF PAYMENT IN 2023-24 (1.16%)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="border p-2">If paid by</th>
-                      <th className="border p-2">
-                        Opening Balance FOR 2023-24
-                      </th>
-                      <th className="border p-2">
-                        Current year Interest up to the month
-                      </th>
-                      <th className="border p-2">Total payable</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summaryTables.table116.map((row, index) => (
-                      <tr key={index}>
-                        <td className="border p-2">{row.paymentDate}</td>
-                        <td className="border p-2 text-right">
-                          {row.openingBalance.toLocaleString()}
-                        </td>
-                        <td className="border p-2 text-right">
-                          {row.interest.toLocaleString()}
-                        </td>
-                        <td className="border p-2 text-right">
-                          {row.totalPayable.toLocaleString()}
-                        </td>
+          {results && (
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Historical Data</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-2 text-left">Year</th>
+                        <th className="px-4 py-2 text-right">Wages</th>
+                        <th className="px-4 py-2 text-right">Difference</th>
+                        <th className="px-4 py-2 text-right">Interest</th>
+                        <th className="px-4 py-2 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {Object.entries(results.yearlyData).map(([year, data]) => (
+                        <tr key={year} className="border-t">
+                          <td className="px-4 py-2">{year}</td>
+                          <td className="px-4 py-2 text-right">{data.wages.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right">{data.difference.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right">{data.interest.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right">{data.total.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Payment Schedule</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th className="px-4 py-2 text-left">If paid by</th>
+                        <th className="px-4 py-2 text-right">Opening Balance</th>
+                        <th className="px-4 py-2 text-right">Interest</th>
+                        <th className="px-4 py-2 text-right">Total Payable</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.paymentSchedule.map((payment, index) => (
+                        <tr key={index} className="border-t">
+                          <td className="px-4 py-2">{payment.date}</td>
+                          <td className="px-4 py-2 text-right">
+                            {payment.openingBalance.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            {payment.interest.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            {payment.totalPayable.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
